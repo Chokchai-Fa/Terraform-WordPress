@@ -1,5 +1,15 @@
 # Terraform-WordPress
 
+
+## Goals
+The goal of the project is to be able to automate deployment from scratch (source
+code), i.e., continuous deployment (CD). By not allowed to deploy Wordpress using
+any other means. So, no docker image, Wordpress appliance, or snap package manager
+are allowed.
+
+## Application Architecture
+![Alt Text](image/application_architecture.png)
+
 ## Cloud Architecture
 
 ![Alt Text](image/cloud_architecture.png)
