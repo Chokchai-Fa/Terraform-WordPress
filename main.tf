@@ -12,7 +12,7 @@ terraform {
 
 # Configure the AWS provider
 provider "aws" {
-  region = "ap-southeast-1"
+  region = var.region
   profile = "chokchai"
 }
 
@@ -34,7 +34,7 @@ resource "aws_internet_gateway" "my_igw" {
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.my_vpc.id
   cidr_block             = "10.0.1.0/24"
-  availability_zone       = "ap-southeast-1a"
+  availability_zone       = var.availability_zone
   map_public_ip_on_launch = true            # Allow instances in this subnet to have public IPs
 }
 
@@ -42,7 +42,7 @@ resource "aws_subnet" "public_subnet" {
 resource "aws_subnet" "private_subnet" {
   vpc_id                  = aws_vpc.my_vpc.id
   cidr_block             = "10.0.10.0/24"  
-  availability_zone       = "ap-southeast-1a"   
+  availability_zone       = var.availability_zone   
 }
 
 # Create a Route Table for the public subnet
