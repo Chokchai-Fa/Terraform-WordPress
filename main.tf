@@ -63,6 +63,46 @@ resource "aws_route_table_association" "public_association" {
   route_table_id = aws_route_table.public_route_table.id
 }
 
+resource "aws_eip" "nat_eip" {
+  domain = "vpc"
+}
+
+# Create a NAT gateway
+resource "aws_nat_gateway" "nat_gateway" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.public_subnet.id
+}
+
+# # Create a new Elastic IP address for the NAT gateway
+# resource "aws_instance" "nat_instance" {
+#   ami                    = var.ami
+#   instance_type          = "t2.micro"
+#   subnet_id              = aws_subnet.public_subnet.id
+#   associate_public_ip_address = true
+
+#   tags = {
+#     Name = "NATGatewayInstance"
+#   }
+# }
+
+# Create a Route Table for the private subnet
+resource "aws_route_table" "private_route_table" {
+  vpc_id = aws_vpc.my_vpc.id
+}
+
+# Create a default route pointing to the NAT Gateway in the private route table
+resource "aws_route" "private_route_nat" {
+  route_table_id         = aws_route_table.private_route_table.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_nat_gateway.nat_gateway.id
+}
+
+# Associate the private subnet with the private route table
+resource "aws_route_table_association" "private_association" {
+  subnet_id      = aws_subnet.private_subnet.id
+  route_table_id = aws_route_table.private_route_table.id
+}
+
 resource "aws_security_group" "wordpress_sg" {
   vpc_id = aws_vpc.my_vpc.id
 
@@ -84,7 +124,7 @@ resource "aws_security_group" "wordpress_sg" {
     from_port = 22
     to_port   = 22
     protocol  = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Replace with your actual SSH IP range for security
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -111,7 +151,7 @@ resource "aws_security_group" "mariadb_sg" {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Replace with your actual CIDR block for security
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
