@@ -73,18 +73,6 @@ resource "aws_nat_gateway" "nat_gateway" {
   subnet_id     = aws_subnet.public_subnet.id
 }
 
-# # Create a new Elastic IP address for the NAT gateway
-# resource "aws_instance" "nat_instance" {
-#   ami                    = var.ami
-#   instance_type          = "t2.micro"
-#   subnet_id              = aws_subnet.public_subnet.id
-#   associate_public_ip_address = true
-
-#   tags = {
-#     Name = "NATGatewayInstance"
-#   }
-# }
-
 # Create a Route Table for the private subnet
 resource "aws_route_table" "private_route_table" {
   vpc_id = aws_vpc.my_vpc.id
