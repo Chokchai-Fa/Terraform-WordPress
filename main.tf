@@ -42,7 +42,7 @@ resource "aws_subnet" "public_subnet" {
 resource "aws_subnet" "private_subnet" {
   vpc_id                  = aws_vpc.my_vpc.id
   cidr_block             = "10.0.10.0/24"  
-  availability_zone       = var.availability_zone   
+  availability_zone       = var.availability_zone
 }
 
 # Create a Route Table for the public subnet
@@ -82,7 +82,7 @@ resource "aws_route_table" "private_route_table" {
 resource "aws_route" "private_route_nat" {
   route_table_id         = aws_route_table.private_route_table.id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_nat_gateway.nat_gateway.id
+  nat_gateway_id             = aws_nat_gateway.nat_gateway.id ###
 }
 
 # Associate the private subnet with the private route table
@@ -126,7 +126,6 @@ resource "aws_security_group" "wordpress_sg" {
 resource "aws_security_group" "mariadb_sg" {
   vpc_id = aws_vpc.my_vpc.id
 
-
   # Allow ICMP (ping) traffic
   ingress {
     from_port   = -1  # -1 means any port
@@ -150,6 +149,38 @@ resource "aws_security_group" "mariadb_sg" {
   }
 }
 
+## EC2 in private subnet (mairadb)
+resource "aws_instance" "mariadb_instance" {
+  ami           = var.ami
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.private_subnet.id
+  vpc_security_group_ids = [aws_security_group.mariadb_sg.id]
+  key_name = "chokchai-chula"
+  private_ip   = "10.0.10.74"
+
+  user_data     = <<-EOF
+                #!/bin/bash
+                sudo apt-get update
+                sudo apt-get install -y mariadb-server
+                sudo sh -c 'echo "[mysqld]" >> /etc/mysql/my.cnf'
+                sudo sh -c 'echo "bind-address = 0.0.0.0" >> /etc/mysql/my.cnf'
+                sudo mysql -uroot -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'Phukao98765';"
+                sudo mysql -uroot -p'Phukao98765' -e "CREATE DATABASE wordpress;"
+                sudo mysql -uroot -p'Phukao98765' -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'Phukao98765' WITH GRANT OPTION;"
+                sudo mysql -uroot -p'Phukao98765' -e "FLUSH PRIVILEGES;"
+                sudo systemctl restart mariadb
+                EOF
+
+  tags = {
+    Name = "MariaDBInstance"
+  }
+}
+
+output "mariadb_instance_ip" {
+  value = aws_instance.mariadb_instance.private_ip
+}
+
+
 ## EC2 in public subnet (wordpress)
 resource "aws_instance" "wordpress_instance" {
   ami           = var.ami
@@ -157,20 +188,43 @@ resource "aws_instance" "wordpress_instance" {
   subnet_id     = aws_subnet.public_subnet.id
   key_name = "chokchai-chula"
   vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo apt-get update
+              sudo apt-get install -y software-properties-common
+              sudo apt-get update
+              sudo apt-get install -y php8.1 php8.1-cli php8.1-mysql php8.1-gd php8.1-xml php8.1-mbstring php8.1-curl php8.1-zip
+              sudo apt-get install -y apache2 mysql-server
+              sudo apt-get install -y wget
+              cd /var/www/html
+              sudo wget https://wordpress.org/latest.tar.gz
+              sudo tar -xzvf latest.tar.gz
+              sudo chown -R www-data:www-data wordpress
+              sudo rm latest.tar.gz
+              cd wordpress
+              sudo cp wp-config-sample.php wp-config.php
+              sudo sed -i 's/database_name_here/wordpress/g' wp-config.php
+              sudo sed -i 's/username_here/root/g' wp-config.php
+              sudo sed -i 's/password_here/Phukao98765/g' wp-config.php
+              sudo sed -i "s/localhost/10.0.10.74/g" wp-config.php
+              sudo mv /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default.conf.bak
+              sudo touch /etc/apache2/sites-available/000-default.conf
+              echo "<VirtualHost *:80>
+                  ServerAdmin webmaster@localhost
+                  DocumentRoot /var/www/html/wordpress
+                  ErrorLog /var/log/apache2/error.log
+                  CustomLog /var/log/apache2/access.log combined
+              </VirtualHost>" | sudo tee /etc/apache2/sites-available/000-default.conf
+              sudo a2enmod rewrite
+              sudo systemctl restart apache2
+              sudo systemctl restart mysql
+              EOF
 
   tags = {
     Name = "WordpressInstance"
   }
 }
 
-## EC2 in private subnet (mairadb)
-resource "aws_instance" "mariadb_instance" {
-  ami           = var.ami
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.private_subnet.id
-  vpc_security_group_ids = [aws_security_group.mariadb_sg.id]
-
-  tags = {
-    Name = "MariaDBInstance"
-  }
+output "wordpress_instance_ip" {
+  value = aws_instance.wordpress_instance.public_ip
 }
