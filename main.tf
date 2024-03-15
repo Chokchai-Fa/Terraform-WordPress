@@ -82,7 +82,7 @@ resource "aws_route_table" "private_route_table" {
 resource "aws_route" "private_route_nat" {
   route_table_id         = aws_route_table.private_route_table.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id             = aws_nat_gateway.nat_gateway.id ###
+  nat_gateway_id             = aws_nat_gateway.nat_gateway.id
 }
 
 # Associate the private subnet with the private route table
@@ -157,7 +157,6 @@ resource "aws_instance" "mariadb_instance" {
   vpc_security_group_ids = [aws_security_group.mariadb_sg.id]
   key_name = "chokchai-chula"
   private_ip   = "10.0.10.74"
-
   user_data     = <<-EOF
                 #!/bin/bash
                 sudo apt-get update
@@ -188,7 +187,13 @@ resource "aws_instance" "wordpress_instance" {
   subnet_id     = aws_subnet.public_subnet.id
   key_name = "chokchai-chula"
   vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
-  user_data = <<-EOF
+
+  depends_on = [aws_instance.mariadb_instance]
+
+  
+  provisioner "remote-exec" {
+    inline= [
+              <<-EOF
               #!/bin/bash
               sudo apt-get update
               sudo apt-get install -y software-properties-common
@@ -196,6 +201,9 @@ resource "aws_instance" "wordpress_instance" {
               sudo apt-get install -y php8.1 php8.1-cli php8.1-mysql php8.1-gd php8.1-xml php8.1-mbstring php8.1-curl php8.1-zip
               sudo apt-get install -y apache2 mysql-server
               sudo apt-get install -y wget
+              curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+              chmod +x wp-cli.phar
+              sudo mv wp-cli.phar /usr/local/bin/wp
               cd /var/www/html
               sudo wget https://wordpress.org/latest.tar.gz
               sudo tar -xzvf latest.tar.gz
@@ -203,10 +211,10 @@ resource "aws_instance" "wordpress_instance" {
               sudo rm latest.tar.gz
               cd wordpress
               sudo cp wp-config-sample.php wp-config.php
-              sudo sed -i 's/database_name_here/wordpress/g' wp-config.php
-              sudo sed -i 's/username_here/root/g' wp-config.php
-              sudo sed -i 's/password_here/Phukao98765/g' wp-config.php
-              sudo sed -i "s/localhost/10.0.10.74/g" wp-config.php
+              sudo sed -i 's/database_name_here/${var.database_name}/g' wp-config.php
+              sudo sed -i 's/username_here/${var.database_user}/g' wp-config.php
+              sudo sed -i 's/password_here/${var.database_pass}/g' wp-config.php
+              sudo sed -i "s/localhost/${aws_instance.mariadb_instance.private_ip}/g" wp-config.php
               sudo mv /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default.conf.bak
               sudo touch /etc/apache2/sites-available/000-default.conf
               echo "<VirtualHost *:80>
@@ -218,7 +226,18 @@ resource "aws_instance" "wordpress_instance" {
               sudo a2enmod rewrite
               sudo systemctl restart apache2
               sudo systemctl restart mysql
+              wp core install --url=${aws_instance.wordpress_instance.public_ip}  --title="Chokchai Site" --admin_user=${var.admin_user} --admin_password=${var.admin_pass} --admin_email="6572015021@student.chula.ac.th" --skip-email --allow-root --path=/var/www/html/wordpress
+              wp site switch-language en_US --allow-root --path=/var/www/html/wordpress
               EOF
+              ]
+  connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/chokchai-chula.pem")
+      host        = self.public_ip
+    }
+
+  }
 
   tags = {
     Name = "WordpressInstance"
