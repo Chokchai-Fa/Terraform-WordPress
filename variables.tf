@@ -45,3 +45,10 @@ variable "admin_pass" {
     type = string
     default = "1234"
 }
+
+
+variable "bucket_name" {
+    description = "Value of s3 bucket name"
+    type = string
+    default = "chokchai-wordpress"
+}

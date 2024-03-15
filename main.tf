@@ -149,6 +149,50 @@ resource "aws_security_group" "mariadb_sg" {
   }
 }
 
+resource "aws_s3_bucket" "wordpress_bucket" {
+  bucket = var.bucket_name
+
+  tags = {
+    Name = "S3 WordPress Media Bucket"
+  }
+}
+
+# Allow the WordPress instance to access the S3 bucket
+resource "aws_s3_bucket_policy" "wordpress_bucket_policy" {
+  bucket = aws_s3_bucket.wordpress_bucket.bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect    = "Allow",
+      Principal = "*",
+      Action    = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      Resource  = "${aws_s3_bucket.wordpress_bucket.arn}/*",
+      Condition = {
+        StringEquals = {
+          "aws:SourceVpc" = aws_vpc.my_vpc.id
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "s3_full_access" {
+  role       = aws_iam_role.wordpress_s3_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+
+
+resource "aws_iam_instance_profile" "s3_profile" {
+  name = "s3-profile"
+  role = aws_iam_role.wordpress_s3_role.name
+}
+
 ## EC2 in private subnet (mairadb)
 resource "aws_instance" "mariadb_instance" {
   ami           = var.ami
@@ -179,6 +223,22 @@ output "mariadb_instance_ip" {
   value = aws_instance.mariadb_instance.private_ip
 }
 
+resource "aws_iam_role" "wordpress_s3_role" {
+  name = "wordpress_s3_role"
+  assume_role_policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
 
 ## EC2 in public subnet (wordpress)
 resource "aws_instance" "wordpress_instance" {
@@ -187,10 +247,9 @@ resource "aws_instance" "wordpress_instance" {
   subnet_id     = aws_subnet.public_subnet.id
   key_name = "chokchai-chula"
   vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
+  depends_on = [aws_instance.mariadb_instance]  
+  iam_instance_profile = aws_iam_instance_profile.s3_profile.id
 
-  depends_on = [aws_instance.mariadb_instance]
-
-  
   provisioner "remote-exec" {
     inline= [
               <<-EOF
@@ -228,6 +287,11 @@ resource "aws_instance" "wordpress_instance" {
               sudo systemctl restart mysql
               wp core install --url=${aws_instance.wordpress_instance.public_ip}  --title="Chokchai Site" --admin_user=${var.admin_user} --admin_password=${var.admin_pass} --admin_email="6572015021@student.chula.ac.th" --skip-email --allow-root --path=/var/www/html/wordpress
               wp site switch-language en_US --allow-root --path=/var/www/html/wordpress
+              sudo wp plugin install amazon-s3-and-cloudfront --activate --allow-root --path=/var/www/html/wordpress
+              wp option update as3cf_settings '{"bucket":"${aws_s3_bucket.wordpress_bucket.bucket}","region":"${var.region}","enable_iam_role":"on"}' --format=json --path=/var/www/html/wordpress
+              wp option update as3cf_bucket ${aws_s3_bucket.wordpress_bucket.bucket} --allow-root --path=/var/www/html/wordpress --path=/var/www/html/wordpress
+              wp option update as3cf_region ${var.region} --allow-root --path=/var/www/html/wordpress --path=/var/www/html/wordpress
+              sudo wp option update as3cf_use_yearmonth_folders 1 --allow-root --path=/var/www/html/wordpress --path=/var/www/html/wordpress
               EOF
               ]
   connection {
