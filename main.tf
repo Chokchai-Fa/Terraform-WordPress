@@ -83,7 +83,6 @@ resource "aws_route" "private_route_nat" {
   route_table_id         = aws_route_table.private_route_table.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id             = aws_nat_gateway.nat_gateway.id
-  # gateway_id             = aws_internet_gateway.my_igw.id
 }
 
 # Associate the private subnet with the private route table
@@ -194,13 +193,24 @@ resource "aws_iam_instance_profile" "s3_profile" {
   role = aws_iam_role.wordpress_s3_role.name
 }
 
+
+resource "tls_private_key" "key-pair" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "chokchai-key" {
+  key_name   = "chokchai-chula"
+  public_key = tls_private_key.key-pair.public_key_openssh
+}
+
 ## EC2 in private subnet (mairadb)
 resource "aws_instance" "mariadb_instance" {
   ami           = var.ami
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.private_subnet.id
   vpc_security_group_ids = [aws_security_group.mariadb_sg.id]
-  key_name = "chokchai-chula"
+  key_name = aws_key_pair.chokchai-key.key_name
   private_ip   = "10.0.10.74"
   user_data     = <<-EOF
                   #!/bin/bash
@@ -242,12 +252,15 @@ resource "aws_iam_role" "wordpress_s3_role" {
 }
 
 
+
+
+
 ## EC2 in public subnet (wordpress)
 resource "aws_instance" "wordpress_instance" {
   ami           = var.ami
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.public_subnet.id
-  key_name = "chokchai-chula"
+  key_name = aws_key_pair.chokchai-key.key_name
   vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
   depends_on = [aws_instance.mariadb_instance]  
   iam_instance_profile = aws_iam_instance_profile.s3_profile.id
@@ -290,16 +303,12 @@ resource "aws_instance" "wordpress_instance" {
               wp core install --url=${aws_instance.wordpress_instance.public_ip}  --title="Chokchai Site" --admin_user=${var.admin_user} --admin_password=${var.admin_pass} --admin_email="6572015021@student.chula.ac.th" --skip-email --allow-root --path=/var/www/html/wordpress
               wp site switch-language en_US --allow-root --path=/var/www/html/wordpress
               sudo wp plugin install amazon-s3-and-cloudfront --activate --allow-root --path=/var/www/html/wordpress
-              wp option update as3cf_settings '{"bucket":"${aws_s3_bucket.wordpress_bucket.bucket}","region":"${var.region}","enable_iam_role":"on"}' --format=json --path=/var/www/html/wordpress
-              wp option update as3cf_bucket ${aws_s3_bucket.wordpress_bucket.bucket} --allow-root --path=/var/www/html/wordpress --path=/var/www/html/wordpress
-              wp option update as3cf_region ${var.region} --allow-root --path=/var/www/html/wordpress --path=/var/www/html/wordpress
-              sudo wp option update as3cf_use_yearmonth_folders 1 --allow-root --path=/var/www/html/wordpress --path=/var/www/html/wordpress
               EOF
               ]
   connection {
       type        = "ssh"
       user        = "ubuntu"
-      private_key = file("~/chokchai-chula.pem")
+      private_key = tls_private_key.key-pair.private_key_pem
       host        = self.public_ip
     }
 
@@ -310,6 +319,13 @@ resource "aws_instance" "wordpress_instance" {
   }
 }
 
+output "private_key" {
+  value     = tls_private_key.key-pair.private_key_pem
+  sensitive = false
+}
+
 output "wordpress_instance_ip" {
   value = aws_instance.wordpress_instance.public_ip
 }
+
+
