@@ -83,6 +83,7 @@ resource "aws_route" "private_route_nat" {
   route_table_id         = aws_route_table.private_route_table.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id             = aws_nat_gateway.nat_gateway.id
+  # gateway_id             = aws_internet_gateway.my_igw.id
 }
 
 # Associate the private subnet with the private route table
@@ -158,17 +159,18 @@ resource "aws_instance" "mariadb_instance" {
   key_name = "chokchai-chula"
   private_ip   = "10.0.10.74"
   user_data     = <<-EOF
-                #!/bin/bash
-                sudo apt-get update
-                sudo apt-get install -y mariadb-server
-                sudo sh -c 'echo "[mysqld]" >> /etc/mysql/my.cnf'
-                sudo sh -c 'echo "bind-address = 0.0.0.0" >> /etc/mysql/my.cnf'
-                sudo mysql -uroot -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'Phukao98765';"
-                sudo mysql -uroot -p'Phukao98765' -e "CREATE DATABASE wordpress;"
-                sudo mysql -uroot -p'Phukao98765' -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'Phukao98765' WITH GRANT OPTION;"
-                sudo mysql -uroot -p'Phukao98765' -e "FLUSH PRIVILEGES;"
-                sudo systemctl restart mariadb
-                EOF
+                  #!/bin/bash
+                  sudo apt-get update
+                  curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-10.6"
+                  sudo apt install mariadb-server mariadb-client -y
+                  sudo sh -c 'echo "[mysqld]" >> /etc/mysql/my.cnf'
+                  sudo sh -c 'echo "bind-address = 0.0.0.0" >> /etc/mysql/my.cnf'
+                  sudo mysql -uroot -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'Phukao98765';"
+                  sudo mysql -uroot -p'Phukao98765' -e "CREATE DATABASE wordpress;"
+                  sudo mysql -uroot -p'Phukao98765' -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'Phukao98765' WITH GRANT OPTION;"
+                  sudo mysql -uroot -p'Phukao98765' -e "FLUSH PRIVILEGES;"
+                  sudo systemctl restart mariadb
+                  EOF
 
   tags = {
     Name = "MariaDBInstance"
