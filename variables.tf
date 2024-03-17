@@ -52,3 +52,9 @@ variable "bucket_name" {
     type = string
     default = "chokchai-wordpress"
 }
+
+variable "key_name" {
+    description = "Value of key pair name"
+    type = string
+    default = "chokchai-keypair"
+}

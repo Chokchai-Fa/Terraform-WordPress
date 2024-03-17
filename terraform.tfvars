@@ -7,6 +7,7 @@ database_user     = "root"
 database_pass     = "Phukao98765"
 admin_user        = "admin"
 admin_pass        = "1234"
+key_name = "chokchai-key-20a9d440"
 
 
 
@@ -19,3 +20,4 @@ admin_pass        = "1234"
 # database_pass     = "Phukao98765"
 # admin_user        = "admin"
 # admin_pass        = "1234"
+# key_name = "chokchai-key-3389d95c"

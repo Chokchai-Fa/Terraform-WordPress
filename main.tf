@@ -200,8 +200,13 @@ resource "tls_private_key" "key-pair" {
 }
 
 resource "aws_key_pair" "chokchai-key" {
-  key_name   = "chokchai-chula"
+  key_name   = var.key_name
   public_key = tls_private_key.key-pair.public_key_openssh
+}
+
+resource "aws_key_pair" "aj_key" {
+  key_name   = "aj-key"
+  public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIODaHqtrCOBpfD+meWggDG5gFEqnNDtpxnqQ7xWIfXfL cloud-wordpress"
 }
 
 ## EC2 in private subnet (mairadb)
@@ -250,9 +255,6 @@ resource "aws_iam_role" "wordpress_s3_role" {
     ]
   })
 }
-
-
-
 
 
 ## EC2 in public subnet (wordpress)
@@ -321,7 +323,7 @@ resource "aws_instance" "wordpress_instance" {
 
 output "private_key" {
   value     = tls_private_key.key-pair.private_key_pem
-  sensitive = false
+  sensitive = true
 }
 
 output "wordpress_instance_ip" {
